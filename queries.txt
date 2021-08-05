@@ -69,3 +69,174 @@ POST /products/_update/101?if_primary_term=1&if_seq_no=25
     "source": "ctx._source.in_stock--"
   }
 }
+POST /products/_update_by_query
+{
+  "script": {
+    "source": "ctx._source.in_stock--"
+  },
+  "query": {
+    "match_all": {}
+  }
+}
+POST /products/_delete_by_query
+{
+  "query": {
+    "match_all": {}
+  }
+}
+POST /_bulk
+{ "index": { "_index": "products", "_id": 200 } }
+{ "name" : "Expresso Machine", "price": 199, "in_stock": 5 }
+{ "create": { "_index": "products", "_id": 201 } }
+{ "name" : "Milk Frother", "price": 149, "in_stock": 14 }
+
+POST /products/_bulk
+{ "update": { "_id": 201 } }
+{ "doc": { "price": 129 } }
+{ "delete": { "_id": 200 } }
+
+POST /_analyze
+{
+  "text": "2 guys walk into a... bar :)",
+  "char_filter": [],
+  "tokenizer": "standard",
+  "filter": ["lowercase"]
+}
+
+//field names as keys and objects as values
+PUT /reviews
+{
+  "mappings": {
+    "properties": {
+      "rating": { "type": "float"},
+      "content": { "type": "text"},
+      "product_id": { "type": "integer"},
+      "author": {
+        "properties": {
+          "first_name": {"type": "text"},
+          "last_name": {"type": "text"},
+          "email": {"type": "keyword"} // test
+        }}
+    }
+  }
+}
+PUT /reviews/_doc/2
+{
+  "rating": "5.0",
+  "context": "Outstanding course!",
+  "product_id": 123,
+  "author": {
+    "first_name": "hey",
+    "last_name": "yhou",
+    "email": "test@email.com"
+  }
+}
+
+GET /reviews/_doc/2
+GET /reviews/_mapping
+GET /reviews/_mapping/field/content
+GET /reviews/_mapping/field/author.email
+DELETE /reviews/_mapping
+{
+  "properties": {
+    "created_at": {"type": "date"}
+  }
+}
+PUT /reviews_new
+{
+    "mappings" : {
+      "properties" : {
+        "author" : {
+          "properties" : {
+            "email" : {
+              "type" : "keyword"
+            },
+            "first_name" : {
+              "type" : "text"
+            },
+            "last_name" : {
+              "type" : "text"
+            }
+          }
+        },
+        "content" : {
+          "type" : "text"
+        },
+        "context" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "created_at" : {
+          "type" : "date"
+        },
+        "product_id" : {
+          "type" : "keyword"
+        },
+        "rating" : {
+          "type" : "float"
+        }
+      }
+    }
+}
+
+POST /_reindex
+{
+  "source": {
+    "index": "reviews"
+  },
+  "dest": {
+    "index": "reviews_new"
+  }
+}
+PUT /_template/access-logs
+{
+  "index_patterns": ["access-logs-*"],
+  "settings": {
+    "number_of_shards": 2,
+    "index.mapping.coerce": false
+  },
+  "mappings": {
+    "properties": {
+      "@timestamp": {
+        "type": "date"
+      },
+      "url.original": {
+        "type": "keyword"
+      },
+      "http.request.referrer": {
+        "type": "keyword"
+      },
+      "http.response.status_code": {
+        "type": "long"
+      }
+    }
+  }
+}
+PUT /access-logs-2020-01-01
+GET /access-logs-2020-01-01
+PUT /analyzer_test
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "my_custom_analyzer": {
+          "type": "custom",
+          "char_filter": ["html_strip"],
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase",
+            "stop",
+            "asciifolding"
+          ]
+        }
+      }
+    }
+  }
+}
+GET /products/_search?q=*
+GET /products/_search?q=name:Milk Frother AND price:129

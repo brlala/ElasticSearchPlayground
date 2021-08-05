@@ -1031,6 +1031,323 @@ POST /test_index/_doc
   "age": 26
 }
 ```
+### Searching
+The algorithm for relevance score used previously was TF/IDF before being changed to BM25 algorithm(Nonlinear term frequency saturation, stopwords will constantly get boost while there's a cap to BM25). You can do queries using cURL or body. The score are computed on a per shard basis hence if a document is the only results on a shard it may skew the results. On most occasion this is not a problem.  
+
+We can filter results by query/filter. Query will consider the score in relevance while filter is either yes or no. Another point is that elastic search can cache filters.  
+`GET /products/_search?q=name:Milk Frother AND price:129`
+1. GET /products/_search?explain - adding `explain` to the end will explain the results
+```json
+//body (term level query search for exact matches in index and are not analyzed)
+{
+  "query": {
+    "term": {
+      "name": "milk" // must be normalized
+    }
+  }
+}
+
+//body (match level goes through the same analysis process before being compared)
+{
+  "query": {
+    "match": {
+      "name": "Milk Frother"
+    }
+  }
+}
+```
+2. GET /products/_explain/201 - alternatively we can use this to crosscheck why the query match/doesn't match to the document id `201`
+```json
+// body
+{
+  "query": {
+    "term": {
+      "name": "Milk Frother"}
+  }
+}
+
+//results
+{
+  "_index" : "products",
+  "_type" : "_doc",
+  "_id" : "201",
+  "matched" : false,
+  "explanation" : {
+    "value" : 0.0,
+    "description" : "no matching term",
+    "details" : [ ]
+  }
+}
+```
+#### Term level Queries
+This should be used only for enums, dates, numbers etc. Because term level queries search for exact matches.
+1. GET /products/_search - search api supports 
+   1. single term search
+   2. multi term search
+   3. searching in IDs
+   4. searching range (date, numbers etc.)
+   5. anchor dates(days from a given date e.g. 7 days from today) https://www.elastic.co/guide/en/elasticsearch/reference/current/common-options.html#date-math
+   6. matching non-null values - check for field that exists
+   7. matching based on prefixes
+   8. matching wildcard queries - `?` matches any single character and `*` matches any sequences, is slow, if question mark or asterisk is placed on beginning, it will be slow
+   9. Searching with regex queries - `regexp` field, this uses lucene regex so normal regex such as `/d` will not work. https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-regexp-query.html#regexp-syntax
+```json
+//body
+{
+  "query": {
+    "term": {
+      "is_active": true
+    }
+  }
+}
+
+//body (alternative way of writing queries)
+{
+  "query": {
+    "term": {
+      "is_active": {
+         "value": true
+      }
+    }
+  }
+}
+```
+```json
+//body (search multiple terms, will match any of the terms, this is an IN clause)
+{
+   "query": {
+      "terms": {
+         "tags.keyword": [ "Soup", "Cake" ] // will return with [Soup], [Cake] or [Soup, Cake]
+      }
+   }
+}
+```
+```json
+//body will return document with id 1,2,3
+{
+   "query": {
+      "ids": {
+         "values": [ 1, 2, 3 ]
+      }
+   }
+}
+```
+```json
+//Matching documents with an in_stock field of between 1 and 5, both included
+{
+   "query": {
+      "range": {
+         "in_stock": {
+            "gte": 1,
+            "lte": 5
+         }
+      }
+   }
+}
+
+//Matching documents with a date range
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "2010/01/01",
+            "lte": "2010/12/31"
+         }
+      }
+   }
+}
+
+//Matching documents with a date range and custom date formatv
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "01-01-2010",
+            "lte": "31-12-2010",
+            "format": "dd-MM-yyyy"
+         }
+      }
+   }
+}
+```
+```json
+//Subtracting one year from 2010/01/01
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "2010/01/01||-1y"
+         }
+      }
+   }
+}
+
+//Subtracting one year and one day from 2010/01/01
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "2010/01/01||-1y-1d"
+         }
+      }
+   }
+}
+
+//Subtracting one year from 2010/01/01 and rounding by month
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "2010/01/01||-1y/M"  # rounding off by month M
+         }
+      }
+   }
+}
+
+//Rounding by month before subtracting one year from 2010/01/01
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "2010/01/01||/M-1y"  # the order is important, it will round before subtracting
+         }
+      }
+   }
+}
+
+//Rounding by month before subtracting one year from the current date
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "now/M-1y"  # calculating date relative to current time
+         }
+      }
+   }
+}
+
+//Matching documents with a created field containing the current date or later
+{
+   "query": {
+      "range": {
+         "created": {
+            "gte": "now"  # will match all documents gte current time
+         }
+      }
+   }
+}
+```
+```json
+//Matching documents with non-null values
+{
+  "query": {
+    "exists": {
+      "field": "tags"
+    }
+  }
+}
+```
+```json
+//Matching documents containing a tag beginning with Vege
+{
+   "query": {
+      "prefix": {
+         "tags.keyword": "Vege"
+      }
+   }
+}
+```
+```json
+//Adding an asterisk for any characters (zero or more)
+{
+   "query": {
+      "wildcard": {
+         "tags.keyword": "Veg*ble"
+      }
+   }
+}
+
+//Adding a question mark for any single character, this will not return any results
+{
+   "query": {
+      "wildcard": {
+         "tags.keyword": "Veg?ble"
+      }
+   }
+}
+
+//Adding a question mark for any single character
+{
+   "query": {
+      "wildcard": {
+         "tags.keyword": "Veget?ble"
+      }
+   }
+}
+```
+```json
+//Searching with regular expressions
+{
+   "query": {
+      "regexp": {
+         "tags.keyword": "Veg[a-zA-Z]+ble"
+      }
+   }
+}
+```
+#### Full Text Queries
+This should be used only for enums, dates, numbers etc. Because term level queries search for exact matches.
+1. GET /recipe/_search
+   1. `match` - it's a boolean word so any words in your search query that appeared will be shown as a result
+   1. `match` - specifying `and` boolean operator, order does not matter or if there's any word in-between
+   1. `match_phrase` - must be an exact phrase match, order matters
+   1. `multi_match` - define an array of field to search through, the relevance score will be scored based on the field with most matching https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-multi-match-query.html#multi-match-types
+```json
+// Standard `match` query
+{
+  "query": {
+    "match": {
+      "title": "Recipes with pasta or spaghetti"
+    }
+  }
+}
+```
+```json
+// Specifying a boolean operator
+{
+   "query": {
+      "match": {
+         "title": {
+            "query": "pasta or spaghetti",
+            "operator": "and"
+         }
+      }
+   }
+}
+
+// Specifying a boolean operator
+{
+   "query": {
+      "match": {
+         "title": {
+            "query": "pasta spaghetti",  # this will still return same results as above because it's still a term level query
+            "operator": "and"
+         }
+      }
+   }
+}
+```
+```json
+//Searching multiple fields
+{
+   "query": {
+      "multi_match": {
+         "query": "pasta",
+         "fields": [ "title", "description" ]  # will search pasta in title field/description field
+      }
+   }
+}
+```
 ### Underlying functionality for concurrency control
 1. Primary terms - a way to distinguished between old and new primary shards, it is appended to write query. Allows the replica to know if whether the primary shard has changed since the write request is sent.
 2. Sequence number - appended together with primary term, a counter that is incremented for each write operation, allowing es to know the order of write operations

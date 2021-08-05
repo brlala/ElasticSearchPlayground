@@ -1,0 +1,71 @@
+GET /_cluster/health
+GET /_cat/nodes?v
+GET /_cat/indices?v
+PUT /products
+{
+  "settings": {
+    "number_of_shards": 2
+    , "number_of_replicas": 2
+  }
+}
+DELETE /products
+POST /products/_doc
+{
+  "name": "Toaster",
+  "price": 49,
+  "in_stock": 4
+}
+PUT /products/_doc/100
+{
+  "name": "Toaster",
+  "price": 49,
+  "in_stock": 4
+}
+GET /products/_doc/100
+POST /products/_update/100
+{
+  "doc": {
+    "in_stock": 3
+  }
+}
+POST /products/_update/100
+{
+  "script": {
+    "source": "ctx._source.in_stock--" //access source document, in_stock field and subtract one from it
+  }
+}
+POST /products/_update/100
+{
+  "script": {
+    "source": "ctx._source.in_stock = 10"
+  }
+}
+POST /products/_update/100
+{
+  "script": {
+    "source": "ctx._source.in_stock -= params.quantity",
+    "params": {
+      "quantity": 4
+    }
+  }
+}
+GET /products/_doc/101
+POST /products/_update/101
+{
+  "script": {
+    "source": "ctx._source.in_stock--"
+  },
+  "upsert": {
+    "name": "Blender",
+    "price": 399,
+    "in_stock": 6
+  }
+}
+DELETE /products/_doc/100
+GET /products/_doc/101
+POST /products/_update/101?if_primary_term=1&if_seq_no=25
+{
+  "script": {
+    "source": "ctx._source.in_stock--"
+  }
+}

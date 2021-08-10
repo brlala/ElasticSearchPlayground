@@ -1348,6 +1348,1349 @@ This should be used only for enums, dates, numbers etc. Because term level queri
    }
 }
 ```
+
+#### Querying with boolean logic
+Boolean logic is the internal workings of combining two queries into one using `AND` logic and `OR` logic
+```json
+// Adding query clauses to the `must` key
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "ingredients.name": "parmesan"
+          }
+        },
+        {
+          "range": {
+            "preparation_time_minutes": {
+              "lte": 15
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+// Moving the range query to the `filter` key
+{
+   "query": {
+      "bool": {
+         "must": [
+            {
+               "match": {
+                  "ingredients.name": "parmesan"
+               }
+            }
+         ],
+         "filter": [
+            {
+               "range": {
+                  "preparation_time_minutes": {
+                     "lte": 15
+                  }
+               }
+            }
+         ]
+      }
+   }
+}
+
+// Adding a query clause to the `must_not` key
+{
+   "query": {
+      "bool": {
+         "must": [
+            {
+               "match": {
+                  "ingredients.name": "parmesan"
+               }
+            }
+         ],
+         "must_not": [
+            {
+               "match": {
+                  "ingredients.name": "tuna"
+               }
+            }
+         ],
+         "filter": [
+            {
+               "range": {
+                  "preparation_time_minutes": {
+                     "lte": 15
+                  }
+               }
+            }
+         ]
+      }
+   }
+}
+
+// Adding a query clause to the `should` key
+{
+   "query": {
+      "bool": {
+         "must": [
+            {
+               "match": {
+                  "ingredients.name": "parmesan"
+               }
+            }
+         ],
+         "must_not": [
+            {
+               "match": {
+                  "ingredients.name": "tuna"
+               }
+            }
+         ],
+         "should": [
+            {
+               "match": {
+                  "ingredients.name": "parsley"
+               }
+            }
+         ],
+         "filter": [
+            {
+               "range": {
+                  "preparation_time_minutes": {
+                     "lte": 15
+                  }
+               }
+            }
+         ]
+      }
+   }
+}
+```
+#### How the match query works
+When a match query is received, it will convert automatically to a boolean should query with analyzer applied. If you use a `bool -> must -> term` query, the analyzer will not be applied 
+```json
+{
+  "query": {
+    "match": {
+      "title": "pasta carbonara"
+    }
+  }
+}
+
+// equivalent to
+{
+   "query": {
+      "bool": {
+         "should": [
+            {
+               "term": {
+                  "title": "pasta"
+               }
+            },
+            {
+               "term": {
+                  "title": "carbonara"
+               }
+            }
+         ]
+      }
+   }
+}
+```
+```json
+{
+  "query": {
+    "match": {
+      "title": {
+        "query": "pasta carbonara",
+        "operator": "and"
+      }
+    }
+  }
+}
+
+// equivalent to
+{
+   "query": {
+      "bool": {
+         "must": [
+            {
+               "term": {
+                  "title": "pasta"
+               }
+            },
+            {
+               "term": {
+                  "title": "carbonara"
+               }
+            }
+         ]
+      }
+   }
+}
+```
+#### Joining queries/nested queries
+Relationship database, nested query must be queried using the `nested` way. A nested query must contain:
+1. a path to the field
+2. a query to be run against
+---
+1. Adding Sample Datas  
+```json
+// Creating the index with mapping
+PUT /department
+{
+   "mappings": {
+      "properties": {
+         "name": {
+            "type": "text"
+         },
+         "employees": {
+            "type": "nested"
+         }
+      }
+   }
+}
+
+//adding test documents
+PUT /department/_doc/1
+{
+   "name": "Development",
+   "employees": [
+      {
+         "name": "Eric Green",
+         "age": 39,
+         "gender": "M",
+         "position": "Big Data Specialist"
+      },
+      {
+         "name": "James Taylor",
+         "age": 27,
+         "gender": "M",
+         "position": "Software Developer"
+      },
+      {
+         "name": "Gary Jenkins",
+         "age": 21,
+         "gender": "M",
+         "position": "Intern"
+      },
+      {
+         "name": "Julie Powell",
+         "age": 26,
+         "gender": "F",
+         "position": "Intern"
+      },
+      {
+         "name": "Benjamin Smith",
+         "age": 46,
+         "gender": "M",
+         "position": "Senior Software Engineer"
+      }
+   ]
+}
+
+PUT /department/_doc/2
+{
+   "name": "HR & Marketing",
+   "employees": [
+      {
+         "name": "Patricia Lewis",
+         "age": 42,
+         "gender": "F",
+         "position": "Senior Marketing Manager"
+      },
+      {
+         "name": "Maria Anderson",
+         "age": 56,
+         "gender": "F",
+         "position": "Head of HR"
+      },
+      {
+         "name": "Margaret Harris",
+         "age": 19,
+         "gender": "F",
+         "position": "Intern"
+      },
+      {
+         "name": "Ryan Nelson",
+         "age": 31,
+         "gender": "M",
+         "position": "Marketing Manager"
+      },
+      {
+         "name": "Kathy Williams",
+         "age": 49,
+         "gender": "F",
+         "position": "Senior Marketing Manager"
+      },
+      {
+         "name": "Jacqueline Hill",
+         "age": 28,
+         "gender": "F",
+         "position": "Junior Marketing Manager"
+      },
+      {
+         "name": "Donald Morris",
+         "age": 39,
+         "gender": "M",
+         "position": "SEO Specialist"
+      },
+      {
+         "name": "Evelyn Henderson",
+         "age": 24,
+         "gender": "F",
+         "position": "Intern"
+      },
+      {
+         "name": "Earl Moore",
+         "age": 21,
+         "gender": "M",
+         "position": "Junior SEO Specialist"
+      },
+      {
+         "name": "Phillip Sanchez",
+         "age": 35,
+         "gender": "M",
+         "position": "SEM Specialist"
+      }
+   ]
+}
+```
+```json
+// body
+GET /department/_search
+{
+   "query": {
+      "nested": {
+         "path": "employees",  # this will be the field of  the array
+         "query": {
+            "bool": {
+               "must": [
+                  {
+                     "match": {
+                        "employees.position": "intern"
+                     }
+                  },
+                  {
+                     "term": {
+                        "employees.gender.keyword": {
+                           "value": "F"
+                        }
+                     }
+                  }
+               ]
+            }
+         }
+      }
+   }
+}
+
+//results
+{
+   "took" : 114,
+   "timed_out" : false,
+   "_shards" : {
+      "total" : 1,
+      "successful" : 1,
+      "skipped" : 0,
+      "failed" : 0
+   },
+   "hits" : {
+      "total" : {
+         "value" : 2,
+         "relation" : "eq"
+      },
+      "max_score" : 2.3905568,
+      "hits" : [
+         {
+            "_index" : "department",
+            "_type" : "_doc",
+            "_id" : "2",
+            "_score" : 2.3905568,
+            "_source" : {
+               "name" : "HR & Marketing",
+               "employees" : [
+                  {
+                     "name" : "Patricia Lewis",
+                     "age" : 42,
+                     "gender" : "F",
+                     "position" : "Senior Marketing Manager"
+                  },
+                  {
+                     "name" : "Maria Anderson",
+                     "age" : 56,
+                     "gender" : "F",
+                     "position" : "Head of HR"
+                  },
+                  {
+                     "name" : "Margaret Harris",
+                     "age" : 19,
+                     "gender" : "F",
+                     "position" : "Intern"
+                  },
+                  {
+                     "name" : "Ryan Nelson",
+                     "age" : 31,
+                     "gender" : "M",
+                     "position" : "Marketing Manager"
+                  },
+                  {
+                     "name" : "Kathy Williams",
+                     "age" : 49,
+                     "gender" : "F",
+                     "position" : "Senior Marketing Manager"
+                  },
+                  {
+                     "name" : "Jacqueline Hill",
+                     "age" : 28,
+                     "gender" : "F",
+                     "position" : "Junior Marketing Manager"
+                  },
+                  {
+                     "name" : "Donald Morris",
+                     "age" : 39,
+                     "gender" : "M",
+                     "position" : "SEO Specialist"
+                  },
+                  {
+                     "name" : "Evelyn Henderson",
+                     "age" : 24,
+                     "gender" : "F",
+                     "position" : "Intern"
+                  },
+                  {
+                     "name" : "Earl Moore",
+                     "age" : 21,
+                     "gender" : "M",
+                     "position" : "Junior SEO Specialist"
+                  },
+                  {
+                     "name" : "Phillip Sanchez",
+                     "age" : 35,
+                     "gender" : "M",
+                     "position" : "SEM Specialist"
+                  }
+               ]
+            }
+         },
+         {
+            "_index" : "department",
+            "_type" : "_doc",
+            "_id" : "1",
+            "_score" : 2.3905568,
+            "_source" : {
+               "name" : "Development",
+               "employees" : [
+                  {
+                     "name" : "Eric Green",
+                     "age" : 39,
+                     "gender" : "M",
+                     "position" : "Big Data Specialist"
+                  },
+                  {
+                     "name" : "James Taylor",
+                     "age" : 27,
+                     "gender" : "M",
+                     "position" : "Software Developer"
+                  },
+                  {
+                     "name" : "Gary Jenkins",
+                     "age" : 21,
+                     "gender" : "M",
+                     "position" : "Intern"
+                  },
+                  {
+                     "name" : "Julie Powell",
+                     "age" : 26,
+                     "gender" : "F",
+                     "position" : "Intern"
+                  },
+                  {
+                     "name" : "Benjamin Smith",
+                     "age" : 46,
+                     "gender" : "M",
+                     "position" : "Senior Software Engineer"
+                  }
+               ]
+            }
+         }
+      ]
+   }
+}
+```
+
+2. Inner Hits
+```json
+GET /department/_search
+{
+   "_source": false, # to hide the source document, just easier to read
+   "query": {
+      "nested": {
+         "path": "employees",
+         "inner_hits": {},  # adding this field
+         "query": {
+            "bool": {
+               "must": [
+                  {
+                     "match": {
+                        "employees.position": "intern"
+                     }
+                  },
+                  {
+                     "term": {
+                        "employees.gender.keyword": {
+                           "value": "F"
+                        }
+                     }
+                  }
+               ]
+            }
+         }
+      }
+   }
+}
+
+// results
+{
+   "took" : 3,
+   "timed_out" : false,
+   "_shards" : {
+      "total" : 1,
+      "successful" : 1,
+      "skipped" : 0,
+      "failed" : 0
+   },
+   "hits" : {
+      "total" : {
+         "value" : 2,  # how many items matches the search query
+         "relation" : "eq"
+      },
+      "max_score" : 2.3905568,
+      "hits" : [
+         {
+            "_index" : "department",
+            "_type" : "_doc",
+            "_id" : "2",
+            "_score" : 2.3905568,
+            "inner_hits" : {
+               "employees" : {
+                  "hits" : {
+                     "total" : {
+                        "value" : 2,  # how many nested objects matches the department
+                        "relation" : "eq"
+                     },
+                     "max_score" : 2.3905568,
+                     "hits" : [
+                        {
+                           "_index" : "department",
+                           "_type" : "_doc",
+                           "_id" : "2",
+                           "_nested" : {
+                              "field" : "employees",  # this tells us where the hit came from
+                              "offset" : 2
+                           },
+                           "_score" : 2.3905568,
+                           "_source" : {
+                              "gender" : "F",
+                              "name" : "Margaret Harris",
+                              "position" : "Intern",
+                              "age" : 19
+                           }
+                        },
+                        {
+                           "_index" : "department",
+                           "_type" : "_doc",
+                           "_id" : "2",
+                           "_nested" : {
+                              "field" : "employees",
+                              "offset" : 7
+                           },
+                           "_score" : 2.3905568,
+                           "_source" : {
+                              "gender" : "F",
+                              "name" : "Evelyn Henderson",
+                              "position" : "Intern",
+                              "age" : 24
+                           }
+                        }
+                     ]
+                  }
+               }
+            }
+         },
+         {
+            "_index" : "department",
+            "_type" : "_doc",
+            "_id" : "1",
+            "_score" : 2.3905568,
+            "inner_hits" : {
+               "employees" : {
+                  "hits" : {
+                     "total" : {
+                        "value" : 1,
+                        "relation" : "eq"
+                     },
+                     "max_score" : 2.3905568,
+                     "hits" : [
+                        {
+                           "_index" : "department",
+                           "_type" : "_doc",
+                           "_id" : "1",
+                           "_nested" : {
+                              "field" : "employees",
+                              "offset" : 3
+                           },
+                           "_score" : 2.3905568,
+                           "_source" : {
+                              "gender" : "F",
+                              "name" : "Julie Powell",
+                              "position" : "Intern",
+                              "age" : 26
+                           }
+                        }
+                     ]
+                  }
+               }
+            }
+         }
+      ]
+   }
+}
+```
+
+3. Mapping Document relationships - to add relationship, the mapping need to be remade. We can use a special kind of field called `join` field. We can name the field anything we want. Possible relations must be defined in the `relations` object
+```json
+PUT /department
+{
+   "mappings": {
+      "properties": {
+         "join_field": {
+            "type": "join",
+            "relations": {
+               "department_info": "employee_info"  # arbritary choice, key does not need to match index name, this defines a parent child relationship where `department` is the parent we can use this while adding documents, this field can be a children field by using arrays
+            }
+         }
+      }
+   }
+}
+```
+Adding documents - we need to specify which relationship we want our document to be part of. Our relationship say `department` is parent of `employee`.  
+The children  document is added to the same index, but with specification of the `join_field` and the related parent. In addition, we need to add a routing with the parent id info because parent+child id document must be stored in the same shard.
+```json
+PUT /department/_doc/1
+{
+  "name": "Development",
+  "join_field": "department_info"  # this one should match the key name of the join field, with value matching the key of relationship name
+}
+PUT /department/_doc/2
+{
+   "name": "Marketing",
+   "join_field": "department_info"
+}
+```
+```json
+PUT /department/_doc/3?routing=1  # if we use custom routing, we need to change this field accordingly
+{
+  "name": "Bo Andersen",
+  "age": 28,
+  "gender": "M",
+  "join_field": {
+    "name": "employee_info",
+    "parent": 1
+  }
+}
+```
+```json
+PUT /department/_doc/4?routing=2
+{
+  "name": "John Doe",
+  "age": 44,
+  "gender": "M",
+  "join_field": {
+    "name": "employee_info",
+    "parent": 2
+  }
+}
+```
+```json
+PUT /department/_doc/5?routing=1
+{
+  "name": "James Evans",
+  "age": 32,
+  "gender": "M",
+  "join_field": {
+    "name": "employee_info",
+    "parent": 1
+  }
+}
+```
+```json
+PUT /department/_doc/6?routing=1
+{
+  "name": "Daniel Harris",
+  "age": 52,
+  "gender": "M",
+  "join_field": {
+    "name": "employee_info",
+    "parent": 1
+  }
+}
+```
+```json
+PUT /department/_doc/7?routing=2
+{
+  "name": "Jane Park",
+  "age": 23,
+  "gender": "F",
+  "join_field": {
+    "name": "employee",
+    "parent": 2
+  }
+}
+```
+```json
+PUT /department/_doc/8?routing=1
+{
+  "name": "Christina Parker",
+  "age": 29,
+  "gender": "F",
+  "join_field": {
+    "name": "employee",
+    "parent": 1
+  }
+}
+```
+
+4. Querying by parent ID - we need to tell es which relation we want to query and specify id of `parent_id`. The `hits` will have `join_field`. ES automatically use ID of parent ID to do routing, can be override if needed
+```json
+//GET /department/_search
+{
+  "query": {
+    "parent_id": {  // query object
+      "type": "employee",  // child
+      "id": 1  // id of parent
+    }
+  }
+}
+
+//results
+{
+   "took" : 2,
+   "timed_out" : false,
+   "_shards" : {
+      "total" : 1,
+      "successful" : 1,
+      "skipped" : 0,
+      "failed" : 0
+   },
+   "hits" : {
+      "total" : {
+         "value" : 2,
+         "relation" : "eq"
+      },
+      "max_score" : 0.8266786,
+      "hits" : [
+         {
+            "_index" : "department",
+            "_type" : "_doc",
+            "_id" : "4",
+            "_score" : 0.8266786,
+            "_routing" : "2",
+            "_source" : {
+               "name" : "John Doe",
+               "age" : 44,
+               "gender" : "M",
+               "join_field" : {
+                  "name" : "employee_info",
+                  "parent" : 2
+               }
+            }
+         },
+         {
+            "_index" : "department",
+            "_type" : "_doc",
+            "_id" : "7",
+            "_score" : 0.8266786,
+            "_routing" : "2",
+            "_source" : {
+               "name" : "Jane Park",
+               "age" : 23,
+               "gender" : "F",
+               "join_field" : {
+                  "name" : "employee_info",
+                  "parent" : 2
+               }
+            }
+         }
+      ]
+   }
+}
+```
+
+5. Query child documents by parent criteria(without knowing ID, using search criteria). Using `has_parent` key. We need to specify the `parent_type` and the query the parent document must match. Adding `score` can include relevance of results. Can be used incase it matches more than 1 document such as searching text fields.
+```json
+GET /department/_search
+{
+  "query": {
+    "has_parent": {
+      "parent_type": "department_info",
+      "query": {  // conditions that parent document must satisfy
+        "term": {
+          "name.keyword": "Development"
+        }
+      }
+    }
+  }
+}
+
+//Incorporating the parent documents' relevance scores
+GET /department/_search
+{
+   "query": {
+      "has_parent": {
+         "parent_type": "department",
+         "score": true,
+         "query": {
+            "term": {
+               "name.keyword": "Development"
+            }
+         }
+      }
+   }
+}
+```
+
+6. Query parent by child documents criteria(without knowing ID, using search criteria). Using `has_child` key. We need to specify the `parent_type` and the query the parent document must match. There are 5 different score modes:
+   1. min, lowest score of matching child is mapped to parent's relevant score
+   2. max, highest score of matching child is mapped to parent's relevant score
+   3. sum, total score of matching child is mapped to parent's relevant score
+   4. avg, average score of matching child is mapped to parent's relevant score
+   5. none, score of matching child is not considered  
+The `has_child` can also add `min_children` and `max_children` to add a criteria. you can also add `sorting. We can add `inner_hits` to see how a document is being hit
+```json
+GET /department/_search
+{
+   "query": {
+      "has_child": {
+         "type": "employee_info",
+         "score_mode": "sum",
+         "query": {
+            "bool": {
+               "must": [
+                  {
+                     "range": {
+                        "age": {
+                           "gte": 50
+                        }
+                     }
+                  }
+               ],
+               "should": [
+                  {
+                     "term": {
+                        "gender.keyword": "M"
+                     }
+                  }
+               ]
+            }
+         }
+      }
+   }
+}
+
+//Incorporating the parent documents' relevance scores
+GET /department/_search
+{
+   "query": {
+      "has_child": {
+         "type": "employee",
+         "inner_hits": {}, // to see which documents are being hit, optional
+         "score_mode": "sum",
+         "min_children": 2,
+         "max_children": 5,
+         "query": {
+            "bool": {
+               "must": [
+                  {
+                     "range": {
+                        "age": {
+                           "gte": 50
+                        }
+                     }
+                  }
+               ],
+               "should": [
+                  {
+                     "term": {
+                        "gender.keyword": "M"
+                     }
+                  }
+               ]
+            }
+         }
+      }
+   }
+}
+```
+
+7. Multi-level relations - do note that for this one you need to route it to the shard that contain the highest document of priority
+```json
+//Company -> Department -> Employee
+//        -> Supplier
+PUT /company
+{
+  "mappings": {
+    "properties": {
+      "join_field": { 
+        "type": "join",
+        "relations": {
+          "company": ["department", "supplier"],
+          "department": "employee"
+        }
+      }
+    }
+  }
+}
+
+// adding a company
+PUT /company/_doc/1
+{
+   "name": "My Company Inc.",
+   "join_field": "company"
+}
+```
+```json
+//Adding a company
+PUT /company/_doc/1
+{
+   "name": "Development",
+   "join_field": {
+      "name": "department",
+      "parent": 1
+   }
+}
+
+//Adding a department
+PUT /company/_doc/2?routing=1
+{
+   "name": "Development",
+   "join_field": {
+      "name": "department",
+      "parent": 1
+   }
+}
+        
+//Adding an employee
+PUT /company/_doc/3?routing=1
+{
+   "name": "Bo Andersen",
+   "join_field": {
+      "name": "employee",
+      "parent": 2
+   }
+}
+```
+```json
+// adding data
+PUT /company/_doc/4
+{
+   "name": "Another Company, Inc.",
+   "join_field": "company"
+}
+PUT /company/_doc/5?routing=4
+{
+   "name": "Marketing",
+   "join_field": {
+      "name": "department",
+      "parent": 4
+   }
+}
+PUT /company/_doc/6?routing=4
+{
+   "name": "John Doe",
+   "join_field": {
+      "name": "employee",
+      "parent": 5
+   }
+}
+// querying multi level
+GET /company/_search
+{
+   "query": {
+      "has_child": {
+         "type": "department",
+         "query": {
+            "has_child": {
+               "type": "employee",
+               "inner_hits": {}, // to see which documents are being hit, optional
+               "query": {
+                  "term": {
+                     "name.keyword": "John Doe"
+                  }
+               }
+            }
+         }
+      }
+   }
+}
+```
+8. Querying Stories from a user's followers(get users, check the fields, get the documents in the fields). This is to show stories written by users he/she is following.
+```json
+// Sample user document
+PUT /users/_doc/1
+{
+   "name": "John Roberts",
+   "following" : [2, 3]
+}
+
+// sample stories document
+PUT /stories/_doc/1
+{
+   "user_x": 3,
+   "content": "Wow look, a penguin!"
+}
+PUT /stories/_doc/6
+{
+   "user_x": 2,
+   "content": "Chilling at the beach @ Greece #vacation #goodtimes"
+}
+
+// get query
+GET /stories/_search
+{
+  "query": {
+    "terms": {
+      "user_x": {  // get the results then put the results here
+        "index": "users",
+        "id": "1",
+        "path": "following"
+      }
+    }
+  }
+}
+
+//results
+{
+   "took" : 517,
+   "timed_out" : false,
+   "_shards" : {
+      "total" : 1,
+      "successful" : 1,
+      "skipped" : 0,
+      "failed" : 0
+   },
+   "hits" : {
+      "total" : {
+         "value" : 2,
+         "relation" : "eq"
+      },
+      "max_score" : 1.0,
+      "hits" : [
+         {
+            "_index" : "stories",
+            "_type" : "_doc",
+            "_id" : "1",
+            "_score" : 1.0,
+            "_source" : {
+               "user" : 3,
+               "content" : "Wow look, a penguin!"
+            }
+         },
+         {
+            "_index" : "stories",
+            "_type" : "_doc",
+            "_id" : "6",
+            "_score" : 1.0,
+            "_source" : {
+               "user" : 2,
+               "content" : "Chilling at the beach @ Greece #vacation #goodtimes"
+            }
+         }
+      ]
+   }
+}
+```
+### Controlling Query Results
+1. Controlling how the output looks like
+```json
+// output results as yaml
+GET /recipe/_search?format=yaml
+{
+    "query": {
+      "match": { "title": "pasta" }
+    }
+}
+
+//output results pretty printed
+GET /recipe/_search?pretty
+{
+   "query": {
+      "match": { "title": "pasta" }
+   }
+}
+```
+2. Source filtering - to include/exclude fields. It supports asterisk, mainly used to reduce network latency
+```json
+// Excluding the `_source` field altogether
+GET /recipe/_search
+{
+   "_source": false,
+   "query": {
+      "match": { "title": "pasta" }
+   }
+}
+
+//Only returning the `created` field
+GET /recipe/_search
+{
+   "_source": "created",
+   "query": {
+      "match": { "title": "pasta" }
+   }
+}
+
+//Only returning an object's key(nested)
+GET /recipe/_search
+{
+   "_source": "ingredients.name",
+   "query": {
+      "match": { "title": "pasta" }
+   }
+}
+
+//Returning all of an object's keys
+GET /recipe/_search
+{
+   "_source": "ingredients.*",
+   "query": {
+      "match": { "title": "pasta" }
+   }
+}
+
+//Returning the ingredients object with all keys, and the servings field
+GET /recipe/_search
+{
+   "_source": [ "ingredients.*", "servings" ],
+   "query": {
+      "match": { "title": "pasta" }
+   }
+}
+
+//Including all of the ingredients object's keys, except the name key
+GET /recipe/_search
+{
+   "_source": {
+      "includes": "ingredients.*",
+      "excludes": "ingredients.name"
+   },
+   "query": {
+      "match": { "title": "pasta" }
+   }
+}
+```
+3. Specifying the result:
+   1. size - we can add `size` to url and also the `total` will be returned, useful for pagination. default return size is 10
+   2. specifying an offset - using the `from` keyword, inclusive
+```json
+// using a query parameter
+GET /recipe/_search?size=2
+{
+  "_source": false,
+  "query": {
+    "match": {
+      "title": "pasta"
+    }
+  }
+}
+
+// using request body
+GET /recipe/_search
+{
+   "_source": false,
+   "size": 2,
+   "query": {
+      "match": {
+         "title": "pasta"
+      }
+   }
+}
+```
+```json
+//Specifying an offset with the from parameter
+GET /recipe/_search
+{
+   "_source": false,
+   "size": 2,
+   "from": 2,
+   "query": {
+      "match": {
+         "title": "pasta"
+      }
+   }
+}
+```
+4. Sorting  
+   1. Soring by ascending order(implicitly)
+   2. Sorting by descending order - need to add `_source` to be used for sorting
+   3. Sorting by multiple fields
+   4. Sorting by multivalue fields(array)
+```json
+//body sort by ascending order
+GET /recipe/_search
+{
+  "_source": false,
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    "preparation_time_minutes"
+  ]
+}
+
+//sort by descending order
+GET /recipe/_search
+{
+   "_source": "created",
+   "query": {
+      "match_all": {}
+   },
+   "sort": [
+      { "created": "desc" }
+   ]
+}
+
+// sort by multiple fields
+GET /recipe/_search
+{
+   "_source": [ "preparation_time_minutes", "created" ],
+   "query": {
+      "match_all": {}
+   },
+   "sort": [
+      { "preparation_time_minutes": "asc" },
+      { "created": "desc" }
+   ]
+}
+
+//Sorting by multi-value fields
+GET /recipe/_search
+{
+   "_source": "ratings",
+   "query": {
+      "match_all": {}
+   },
+   "sort": [
+      {
+         "ratings": {
+            "order": "desc",
+            "mode": "avg"  //avg, max, min, none
+         }
+      }
+   ]
+}
+```
+### Improving the Search Results
+1. Searching with fuzziness - adding fuzziness to work with typo, max distance is 2, do note that it is on a per term basis. It uses levenshtein distance which consider deletion, addition transposition as one step. You can disable transposition
+```json
+//Searching with `fuzziness` set to `auto`
+GET /products/_search
+{
+   "query": {
+      "match": {
+         "name": {
+            "query": "l0bster",
+            "fuzziness": "auto"
+            //"fuzzy_transpositions": false, can be optionally disabled
+         }
+      }
+   }
+}
+```
+2. Fuzzy query - fuzzy query is not analyzed, this is not same as the above.
+```json
+GET /products/_search
+{
+  "query": {
+    "fuzzy": {
+      "name": {
+        "value": "LOBSTER",
+        "fuzziness": "auto"
+      }
+    }
+  }
+}
+```
+
+3. highlighting fields - an addiotional `highlight` field will be in the result response. It will also give a little bit of context before and after the highlighted terms, enclosed in `<em>` tags. ES's highlight is based on the underlying implementation of analyzed document so we should not try to replicate it. We can custom the highlight tags to use a different tags instead.
+```json
+//Highlighting matches within the description field
+GET /highlighting/_search
+{
+   "_source": false,
+   "query": {
+      "match": { "description": "Elasticsearch story" }
+   },
+   "highlight": {
+      "fields": {
+         "description" : {}
+      }
+   }
+}
+
+// results
+{
+   "took" : 6481,
+   "timed_out" : false,
+   "_shards" : {
+      "total" : 1,
+      "successful" : 1,
+      "skipped" : 0,
+      "failed" : 0
+   },
+   "hits" : {
+      "total" : {
+         "value" : 1,
+         "relation" : "eq"
+      },
+      "max_score" : 0.68324494,
+      "hits" : [
+         {
+            "_index" : "highlighting",
+            "_type" : "_doc",
+            "_id" : "1",
+            "_score" : 0.68324494,
+            "_ignored" : [
+               "description.keyword"
+            ],
+            "highlight" : {
+               "description" : [
+                  "Let me tell you a <em>story</em> about <em>Elasticsearch</em>.",
+                  "Lots of well-known and established companies use <em>Elasticsearch</em>, and so should you!"
+               ]
+            }
+         }
+      ]
+   }
+}
+```
+```json
+//body to wrap with a different highlighting tags
+GET /highlighting/_search
+{
+  "_source": false,
+  "query": {
+    "match": { "description": "Elasticsearch story" }
+  },
+  "highlight": {
+    "pre_tags": [ "<strong>" ],
+    "post_tags": [ "</strong>" ],
+    "fields": {
+      "description" : {}
+    }
+  }
+}
+```
 ### Underlying functionality for concurrency control
 1. Primary terms - a way to distinguished between old and new primary shards, it is appended to write query. Allows the replica to know if whether the primary shard has changed since the write request is sent.
 2. Sequence number - appended together with primary term, a counter that is incremented for each write operation, allowing es to know the order of write operations
